@@ -155,30 +155,23 @@ void renderGraph(int x, int y, int width, int height)
   gfx->drawFastHLine(startX, startY + height, width, WHITE);
   gfx->drawFastVLine(startX, startY, height, WHITE);
 
-  float step = width / (CO2ValueCount - 1);
+  float step = (width * 1.0) / (CO2ValueCount - 1);
   int min = 400;
   int max = 10000;
 
-  float actualMin = 10000;
-
-  for (int i = 0; i < CO2ValueCount; i++)
-  {
-    if (CO2Values[i] < actualMin && CO2Values[i] > min)
-    {
-      actualMin = CO2Values[i];
-    }
-  }
-  actualMin = actualMin - 1;
-  float logMax = log10(max - actualMin);
-  printf("\nactualMin: %f\n", actualMin);
-  printf("\nlogMax: %f\n", logMax);
+  int divider = 400;
+  float logMax = log10(max / divider);
+  float logMin = log10(min / divider);
+  // printf("\nstep: %f\n", step);
+  // printf("\nlogMin: %f\n", logMin);
+  // printf("\nlogMax: %f\n", logMax);
 
   for (int i = 1; i < CO2ValueCount; i++)
   {
     if (CO2Values[i] > min && CO2Values[i] < max)
     {
-      int lastY = map(log10(CO2Values[i - 1] - actualMin) * 1000, 0, logMax * 1000, startY + height, startY);
-      int currentY = map(log10(CO2Values[i] - actualMin) * 1000, 0, logMax * 1000, startY + height, startY);
+      int lastY = map(log10(CO2Values[i - 1] / divider) * 1000, logMin, logMax * 1000, startY + height, startY);
+      int currentY = map(log10(CO2Values[i] / divider) * 1000, logMin, logMax * 1000, startY + height, startY);
       uint16_t colour = GREEN;
       if (CO2Values[i] > 2000)
       {
@@ -239,7 +232,7 @@ void loop()
     addNewCO2Reading(scd30.CO2);
     //graph
 
-    renderGraph(120, 200, 120, 40);
+    renderGraph(120, 190, 120, 50);
   }
 
   delay(100);
