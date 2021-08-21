@@ -1,5 +1,6 @@
 #include <Adafruit_SCD30.h>
 #include <Arduino_GFX_Library.h>
+#include <math.h>
 
 Adafruit_SCD30 scd30;
 Arduino_DataBus *bus = new Arduino_HWSPI(15 /* DC */, 4 /* CS */);
@@ -158,12 +159,26 @@ void renderGraph(int x, int y, int width, int height)
   int min = 400;
   int max = 10000;
 
+  float actualMin = 10000;
+
+  for (int i = 0; i < CO2ValueCount; i++)
+  {
+    if (CO2Values[i] < actualMin && CO2Values[i] > min)
+    {
+      actualMin = CO2Values[i];
+    }
+  }
+  actualMin = actualMin - 1;
+  float logMax = log10(max - actualMin);
+  printf("\nactualMin: %f\n", actualMin);
+  printf("\nlogMax: %f\n", logMax);
+
   for (int i = 1; i < CO2ValueCount; i++)
   {
     if (CO2Values[i] > min && CO2Values[i] < max)
     {
-      int lastY = map(CO2Values[i - 1], min, max, startY + height, startY);
-      int currentY = map(CO2Values[i], min, max, startY + height, startY);
+      int lastY = map(log10(CO2Values[i - 1] - actualMin) * 1000, 0, logMax * 1000, startY + height, startY);
+      int currentY = map(log10(CO2Values[i] - actualMin) * 1000, 0, logMax * 1000, startY + height, startY);
       uint16_t colour = GREEN;
       if (CO2Values[i] > 2000)
       {
