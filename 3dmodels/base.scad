@@ -10,8 +10,8 @@ $screwRadius = 1.92 / 2;
 
 $topScrewRadius = 3 / 2;
 
-$screwDepth = 49;
-$screwWidth = 44.2;
+$screwDepth = 44.2;
+$screwWidth = 39.3;
 
 $lip = 5;
 
@@ -34,7 +34,7 @@ module boardScrewHoles() {
   for (x = [ -($screwWidth / 2), ($screwWidth / 2) ]) {
     for (y = [ -($screwDepth / 2), ($screwDepth / 2) ]) {
       translate([ x, y, -($baseHeight / 2) ]) difference() {
-        cylinder($boardHeight + $baseHeight, $holeRadius * 1.5, $holeRadius);
+        cylinder($boardHeight + $baseHeight, $holeRadius * 2, $holeRadius);
         translate([ 0, 0, 0.1 ]) cylinder($boardHeight + $baseHeight, $screwRadius, $screwRadius);
       }
     }
@@ -44,9 +44,9 @@ module boardScrewHoles() {
 module topScrewHoles() {
   for (x = [ -($baseWidth / 2), 0, ($baseWidth / 2) ]) {
     for (y = [ -($baseDepth / 2), 0, ($baseDepth / 2) ]) {
-              if ((x == 0 || y == 0) && (x != y)){
-      translate([ x, y, -($baseHeight / 2 + 0.1) ]) cylinder($lipHeight + 0.2, $topScrewRadius + 1, $topScrewRadius);
-              }
+      if ((x == 0 || y == 0) && (x != y)) {
+        translate([ x, y, -($baseHeight / 2 + 0.1) ]) cylinder($lipHeight + 0.2, $topScrewRadius + 1, $topScrewRadius);
+      }
     }
   }
 }
@@ -55,12 +55,15 @@ module baseScrewHoles(height = 10) {
   translate([ 0, 0, $lipHeight ]) {
     for (x = [ -($baseWidth / 2), 0, ($baseWidth / 2) ]) {
       for (y = [ -($baseDepth / 2), 0, ($baseDepth / 2) ]) {
-        if ((x == 0 || y == 0) && (x != y)){
-        translate([ x, y, -($baseHeight / 2 + 0.1) ]) difference() {
-          cylinder(height, $topScrewRadius + 1, $topScrewRadius + 1);
-          translate([ 0, 0, -0.1 ]) cylinder(height, $topScrewRadius, $topScrewRadius);
+        if ((x == 0 || y == 0) && (x != y)) {
+          translate([ x, y, -($baseHeight / 2 + 0.1) ]) difference() {
+            hull() {
+              cylinder(height, $topScrewRadius + 1, $topScrewRadius + 1);
+              translate([ x / 5, y / 2, 0 ]) { cylinder(height, $topScrewRadius + 1, $topScrewRadius + 1); }
+            }
+            translate([ 0, 0, -0.1 ]) cylinder(height, $topScrewRadius, $topScrewRadius);
+          }
         }
-      }
       }
     }
   }
@@ -75,4 +78,4 @@ module wholeBase() {
 }
 
 wholeBase();
-%baseScrewHoles();
+% baseScrewHoles();

@@ -6,7 +6,8 @@ Adafruit_SCD30 scd30;
 Arduino_DataBus *bus = new Arduino_HWSPI(15 /* DC */, 4 /* CS */);
 Arduino_GFX *gfx = new Arduino_GC9A01(bus, TFT_RST, 0 /* rotation */, false /* IPS */);
 
-const int CO2ValueCount = 50;
+// const int CO2ValueCount = 50;
+const int CO2ValueCount = 240;
 float CO2Values[CO2ValueCount];
 int readingPosition = 0;
 
@@ -19,7 +20,7 @@ void addNewCO2Reading(float reading)
   }
   else
   {
-    for (int i = 0; i < CO2ValueCount; i++)
+    for (int i = 0; i < CO2ValueCount - 1; i++)
     {
       CO2Values[i] = CO2Values[i + 1];
     }
