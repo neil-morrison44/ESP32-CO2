@@ -2,6 +2,8 @@
 #include <Arduino_GFX_Library.h>
 #include <math.h>
 #include <Adafruit_SGP30.h>
+#include "./homekit.h"
+#include "./aqi.h"
 
 Adafruit_SGP30 sgp;
 Adafruit_SCD30 scd30;
@@ -12,6 +14,15 @@ Arduino_GFX *gfx = new Arduino_GC9A01(bus, TFT_RST, 0 /* rotation */, false /* I
 const int CO2ValueCount = 240;
 float CO2Values[CO2ValueCount];
 int readingPosition = 0;
+
+float lastCO2Reading = 400.0;
+int lastTVOCReading = 0;
+int lastIAQValue = 0;
+float lastHumidityReading = 0;
+
+bool loopSerialOutput = false;
+
+#define CO2_WARNING_LEVEL 1250
 
 void addNewCO2Reading(float reading)
 {
@@ -68,6 +79,15 @@ void setup(void)
   }
   Serial.println("SCD30 Found!");
 
+  if (!scd30.setTemperatureOffset(400))
+  {
+    Serial.println("Failed to set temperature offset");
+    while (1)
+    {
+      delay(10);
+    }
+  }
+
   if (!sgp.begin())
   {
     gfx->setCursor(0, 120 - 6);
@@ -81,92 +101,7 @@ void setup(void)
   }
   Serial.println("SGP30 Found!");
 
-  /***
-   * The code below will report the current settings for each of the
-   * settings that can be changed. To see how they work, uncomment the setting
-   * code above a status message and adjust the value
-   *
-   * **Note:** Since Automatic self calibration and forcing recalibration with
-   * a reference value overwrite each other, you should only set one or the other
-  ***/
-
-  /*** Adjust the rate at which measurements are taken, from 2-1800 seconds */
-  // if (!scd30.setMeasurementInterval(5)) {
-  //   Serial.println("Failed to set measurement interval");
-  //   while(1){ delay(10);}
-  // }
-  Serial.print("Measurement interval: ");
-  Serial.print(scd30.getMeasurementInterval());
-  Serial.println(" seconds");
-
-  /*** Restart continuous measurement with a pressure offset from 700 to 1400 millibar.
-   * Giving no argument or setting the offset to 0 will disable offset correction
-   */
-  // if (!scd30.startContinuousMeasurement(15)){
-  //   Serial.println("Failed to set ambient pressure offset");
-  //   while(1){ delay(10);}
-  // }
-  Serial.print("Ambient pressure offset: ");
-  Serial.print(scd30.getAmbientPressureOffset());
-  Serial.println(" mBar");
-
-  /*** Set an altitude offset in meters above sea level.
-   * Offset value stored in non-volatile memory of SCD30.
-   * Setting an altitude offset will override any pressure offset.
-   */
-  // if (!scd30.setAltitudeOffset(110)){
-  //   Serial.println("Failed to set altitude offset");
-  //   while(1){ delay(10);}
-  // }
-  Serial.print("Altitude offset: ");
-  Serial.print(scd30.getAltitudeOffset());
-  Serial.println(" meters");
-
-  /*** Set a temperature offset in hundredths of a degree celcius.
-   * Offset value stored in non-volatile memory of SCD30.
-   */
-  // if (!scd30.setTemperatureOffset(1984)){ // 19.84 degrees celcius
-  //   Serial.println("Failed to set temperature offset");
-  //   while(1){ delay(10);}
-  // }
-  Serial.print("Temperature offset: ");
-  Serial.print((float)scd30.getTemperatureOffset() / 100.0);
-  Serial.println(" degrees C");
-
-  /*** Force the sensor to recalibrate with the given reference value
-   * from 400-2000 ppm. Writing a recalibration reference will overwrite
-   * any previous self calibration values.
-   * Reference value stored in non-volatile memory of SCD30.
-   */
-  // if (!scd30.forceRecalibrationWithReference(400)){
-  //   Serial.println("Failed to force recalibration with reference");
-  //   while(1) { delay(10); }
-  // }
-  Serial.print("Forced Recalibration reference: ");
-  Serial.print(scd30.getForcedCalibrationReference());
-  Serial.println(" ppm");
-
-  /*** Enable or disable automatic self calibration (ASC).
-   * Parameter stored in non-volatile memory of SCD30.
-   * Enabling self calibration will override any previously set
-   * forced calibration value.
-   * ASC needs continuous operation with at least 1 hour
-   * 400ppm CO2 concentration daily.
-   */
-  // if (!scd30.selfCalibrationEnabled(true)){
-  //   Serial.println("Failed to enable or disable self calibration");
-  //   while(1) { delay(10); }
-  // }
-  if (scd30.selfCalibrationEnabled())
-  {
-    Serial.print("Self calibration enabled");
-  }
-  else
-  {
-    Serial.print("Self calibration disabled");
-  }
-
-  Serial.println("\n\n");
+  setupHomeKit(&lastCO2Reading, &lastTVOCReading, &lastIAQValue, &lastHumidityReading);
 }
 
 void renderGraph(int x, int y, int width, int height)
@@ -212,6 +147,8 @@ void renderGraph(int x, int y, int width, int height)
 
 void loop()
 {
+  loopHomeKit();
+
   if (scd30.dataReady())
   {
 
@@ -229,42 +166,57 @@ void loop()
       return;
     }
 
-    Serial.print("TVOC ");
-    Serial.print(sgp.TVOC);
-    Serial.print(" ppb\t");
-    Serial.print("eCO2 ");
-    Serial.print(sgp.eCO2);
-    Serial.println(" ppm");
-
-    if (!sgp.IAQmeasureRaw())
+    if (loopSerialOutput)
     {
-      Serial.println("Raw Measurement failed");
-      return;
+
+      Serial.print("TVOC ");
+      Serial.print(sgp.TVOC);
+      Serial.print(" ppb\t");
+      Serial.print("eCO2 ");
+      Serial.print(sgp.eCO2);
+      Serial.println(" ppm");
+
+      if (!sgp.IAQmeasureRaw())
+      {
+        Serial.println("Raw Measurement failed");
+        return;
+      }
+      Serial.print("Raw H2 ");
+      Serial.print(sgp.rawH2);
+      Serial.print(" \t");
+      Serial.print("Raw Ethanol ");
+      Serial.print(sgp.rawEthanol);
+      Serial.println("");
+
+      Serial.print("Temperature: ");
+      Serial.print(scd30.temperature);
+      Serial.println(" degrees C");
+
+      Serial.print("Relative Humidity: ");
+      Serial.print(scd30.relative_humidity);
+      Serial.println(" %");
+
+      Serial.print("CO2: ");
+      Serial.print(scd30.CO2, 3);
+      Serial.println(" ppm");
+      Serial.println("");
+
+      Serial.print("Temperature offset: ");
+      Serial.print((float)scd30.getTemperatureOffset() / 100.0);
+      Serial.println(" degrees C");
+
+      printf("\nIAQ: %d \n ", calculateAQI(scd30.CO2, sgp.TVOC, scd30.relative_humidity, scd30.temperature));
     }
-    Serial.print("Raw H2 ");
-    Serial.print(sgp.rawH2);
-    Serial.print(" \t");
-    Serial.print("Raw Ethanol ");
-    Serial.print(sgp.rawEthanol);
-    Serial.println("");
 
-    Serial.print("Temperature: ");
-    Serial.print(scd30.temperature);
-    Serial.println(" degrees C");
+    lastCO2Reading = scd30.CO2;
+    lastTVOCReading = sgp.TVOC;
+    lastHumidityReading = scd30.relative_humidity;
+    lastIAQValue = calculateAQI(scd30.CO2, sgp.TVOC, scd30.relative_humidity, scd30.temperature);
 
-    Serial.print("Relative Humidity: ");
-    Serial.print(scd30.relative_humidity);
-    Serial.println(" %");
+    String co2Text = String(String(lastCO2Reading, 0) + " ppm");
+    String TVOCText = String(String(lastTVOCReading) + " ppb");
 
-    Serial.print("CO2: ");
-    Serial.print(scd30.CO2, 3);
-    Serial.println(" ppm");
-    Serial.println("");
-
-    String co2Text = String(String(scd30.CO2, 0) + " ppm");
-    String TVOCText = String(String(sgp.TVOC) + " ppb");
-
-    addNewCO2Reading(scd30.CO2);
+    addNewCO2Reading(lastCO2Reading);
     gfx->setTextSize(3);
     gfx->setTextColor(WHITE);
     gfx->fillScreen(BLACK);
@@ -273,11 +225,11 @@ void loop()
     gfx->println("TVOC");
     gfx->setCursor((120 - ((TVOCText.length() * 18) / 2)), 30 + 28);
 
-    if (sgp.TVOC > 500)
+    if (lastTVOCReading > 500)
     {
       gfx->setTextColor(RED);
     }
-    else if (sgp.TVOC > 250)
+    else if (lastTVOCReading > 250)
     {
       gfx->setTextColor(YELLOW);
     }
@@ -288,11 +240,11 @@ void loop()
 
     gfx->setCursor((120 - ((3 * 18) / 2)), (120 - 14));
     gfx->println("CO2");
-    if (scd30.CO2 > 2000)
+    if (lastCO2Reading > 2000)
     {
       gfx->setTextColor(RED);
     }
-    else if (scd30.CO2 > 1000)
+    else if (lastCO2Reading > 1000)
     {
       gfx->setTextColor(YELLOW);
     }
