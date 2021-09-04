@@ -1,6 +1,6 @@
 use <base.scad>
-$fa = 0.1;
-$fs = 0.1;
+$fa = 0.5;
+$fs = 0.5;
 //$screenRadius = 35.5 / 2;
 $screenRadius = 37.8 / 2;
 $usbHeight = 16 + 2.6;
@@ -21,15 +21,26 @@ $screenScrewRadius = 2.3 / 2;
 $screenScrewWidth = 26.5;
 $screenDepth = 6.1;
 
+$chinDepth = 4;
+$chinWidth = 16.6;
+$chinHeight = 6;
+
 module outerShape(floorOffset = 0, screenHole = false) {
   hull() {
-    translate([ 0, 0, -floorOffset ]) scale([ 1.005, 1.005, 2 ]) {scale([1.01, 1.01, 1.01]) baseBoard();}
-    translate([ 0, 0, 25 ]) rotate([ $tubeAngle, 0, 0 ]) cylinder($tubeHeight, $screenRadius - 10, $screenRadius, true);
+    translate([ 0, 0, -floorOffset ]) scale([ 1.005, 1.005, 2 ]) { scale([ 1.01, 1.01, 1.01 ]) baseBoard(); }
+    translate([ 0, 0, 25 ]) rotate([ $tubeAngle, 0, 0 ]) innerTube();
   }
 
   if (screenHole) {
-    translate([ 0, 0, 25 ]) rotate([ $tubeAngle, 0, 0 ]) translate([ 0, 0, 2.5 ])
-        cylinder($tubeHeight + 1, $screenRadius - 10, $screenRadius, true);
+    translate([ 0, 0, 25 ]) rotate([ $tubeAngle, 0, 0 ]) translate([ 0, 0, 2.5 ]) innerTube(1, 1);
+  }
+}
+
+module innerTube(heightOffset = 0, chinOffset = 0) {
+  union() {
+    cylinder($tubeHeight + heightOffset, $screenRadius - 10, $screenRadius, true);
+    translate([ 0, $screenRadius, ($tubeHeight / 2) - ($chinDepth / 2) - chinOffset ])
+        cube([ $chinWidth, $chinHeight, $chinDepth ], true);
   }
 }
 
@@ -55,12 +66,19 @@ module sensorHole() {
 }
 
 module screenScrews() {
-  translate([ 0, 22, 43 ]) for (x = [ -($screenScrewWidth / 2), ($screenScrewWidth / 2) ]) {
-    translate([ x, 0, 0 ]) rotate([ 90 + $tubeAngle, 0, 0 ]) {
-      translate([ 0, 0, 3 / 2 ]) sphere($screenScrewRadius * 2);
-      difference() {
-        cylinder(3, $screenScrewRadius * 2, $screenScrewRadius * 2, true);
-        translate([ 0, 0, -0.1 ]) cylinder(3, $screenScrewRadius, $screenScrewRadius, true);
+  translate([ 0, 22, 43 ]) {
+    for (x = [ -($screenScrewWidth / 2), ($screenScrewWidth / 2) ]) {
+      translate([ x, 0, 0 ]) {
+        rotate([ 90 + $tubeAngle, 0, 0 ]) {
+          difference() {
+            union() {
+              translate([ 0, 0, 3 / 2 ]) sphere($screenScrewRadius * 2);
+              cylinder(3, $screenScrewRadius * 2, $screenScrewRadius * 2, true);
+            }
+
+            translate([ 0, 0, -0.1 ]) cylinder(10, $screenScrewRadius, $screenScrewRadius, true);
+          }
+        }
       }
     }
   }
@@ -73,8 +91,7 @@ difference() {
   sensorHole();
 }
 
-scale([1.01,1.01,1.01])
-intersection() {
+scale([ 1.01, 1.01, 1.01 ]) intersection() {
   baseScrewHoles(5);
   outerShape();
 }

@@ -8,7 +8,7 @@ $boardHeight = 2.6;
 $holeRadius = 3.2 / 2;
 $screwRadius = 1.92 / 2;
 
-$topScrewRadius = 3 / 2;
+$topScrewRadius = 2.75 / 2;
 
 $screwDepth = 44.2;
 $screwWidth = 39.3;

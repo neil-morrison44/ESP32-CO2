@@ -1,7 +1,9 @@
 #include <Adafruit_SCD30.h>
 #include <Arduino_GFX_Library.h>
 #include <math.h>
+#include <Adafruit_SGP30.h>
 
+Adafruit_SGP30 sgp;
 Adafruit_SCD30 scd30;
 Arduino_DataBus *bus = new Arduino_HWSPI(15 /* DC */, 4 /* CS */);
 Arduino_GFX *gfx = new Arduino_GC9A01(bus, TFT_RST, 0 /* rotation */, false /* IPS */);
@@ -28,6 +30,14 @@ void addNewCO2Reading(float reading)
   }
 }
 
+uint32_t getAbsoluteHumidity(float temperature, float humidity)
+{
+  // approximation formula from Sensirion SGP30 Driver Integration chapter 3.15
+  const float absoluteHumidity = 216.7f * ((humidity / 100.0f) * 6.112f * exp((17.62f * temperature) / (243.12f + temperature)) / (273.15f + temperature)); // [g/m^3]
+  const uint32_t absoluteHumidityScaled = static_cast<uint32_t>(1000.0f * absoluteHumidity);                                                                // [mg/m^3]
+  return absoluteHumidityScaled;
+}
+
 void setup(void)
 {
   Serial.begin(115200);
@@ -47,7 +57,6 @@ void setup(void)
   // Try to initialize!
   if (!scd30.begin())
   {
-
     gfx->setCursor(0, 120 - 6);
     gfx->setTextColor(RED);
     gfx->println("Failed to find SCD30 chip");
@@ -58,6 +67,19 @@ void setup(void)
     }
   }
   Serial.println("SCD30 Found!");
+
+  if (!sgp.begin())
+  {
+    gfx->setCursor(0, 120 - 6);
+    gfx->setTextColor(RED);
+    gfx->println("Failed to find SGP30 chip");
+    Serial.println("Failed to find SGP30 chip");
+    while (1)
+    {
+      delay(10);
+    }
+  }
+  Serial.println("SGP30 Found!");
 
   /***
    * The code below will report the current settings for each of the
@@ -195,9 +217,36 @@ void loop()
 
     if (!scd30.read())
     {
-      Serial.println("Error reading sensor data");
+      Serial.println("SCD30: Error reading sensor data");
       return;
     }
+
+    sgp.setHumidity(getAbsoluteHumidity(scd30.temperature, scd30.relative_humidity));
+
+    if (!sgp.IAQmeasure())
+    {
+      Serial.println("SGP30: Measurement failed");
+      return;
+    }
+
+    Serial.print("TVOC ");
+    Serial.print(sgp.TVOC);
+    Serial.print(" ppb\t");
+    Serial.print("eCO2 ");
+    Serial.print(sgp.eCO2);
+    Serial.println(" ppm");
+
+    if (!sgp.IAQmeasureRaw())
+    {
+      Serial.println("Raw Measurement failed");
+      return;
+    }
+    Serial.print("Raw H2 ");
+    Serial.print(sgp.rawH2);
+    Serial.print(" \t");
+    Serial.print("Raw Ethanol ");
+    Serial.print(sgp.rawEthanol);
+    Serial.println("");
 
     Serial.print("Temperature: ");
     Serial.print(scd30.temperature);
@@ -212,10 +261,31 @@ void loop()
     Serial.println(" ppm");
     Serial.println("");
 
-    int characterCount = (scd30.CO2 > 999 ? 4 : 3) + 4;
+    String co2Text = String(String(scd30.CO2, 0) + " ppm");
+    String TVOCText = String(String(sgp.TVOC) + " ppb");
+
+    addNewCO2Reading(scd30.CO2);
     gfx->setTextSize(3);
     gfx->setTextColor(WHITE);
     gfx->fillScreen(BLACK);
+
+    gfx->setCursor((120 - ((4 * 18) / 2)), 30);
+    gfx->println("TVOC");
+    gfx->setCursor((120 - ((TVOCText.length() * 18) / 2)), 30 + 28);
+
+    if (sgp.TVOC > 500)
+    {
+      gfx->setTextColor(RED);
+    }
+    else if (sgp.TVOC > 250)
+    {
+      gfx->setTextColor(YELLOW);
+    }
+
+    gfx->println(TVOCText);
+
+    gfx->setTextColor(WHITE);
+
     gfx->setCursor((120 - ((3 * 18) / 2)), (120 - 14));
     gfx->println("CO2");
     if (scd30.CO2 > 2000)
@@ -227,10 +297,9 @@ void loop()
       gfx->setTextColor(YELLOW);
     }
 
-    gfx->setCursor((120 - ((characterCount * 18) / 2)), (120 + 14));
-    gfx->println(String(String(scd30.CO2, 0) + " ppm"));
+    gfx->setCursor((120 - ((co2Text.length() * 18) / 2)), (120 + 14));
+    gfx->println(co2Text);
 
-    addNewCO2Reading(scd30.CO2);
     //graph
 
     renderGraph(120, 190, 120, 50);
