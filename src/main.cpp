@@ -4,6 +4,7 @@
 #include <Adafruit_SGP30.h>
 #include "./homekit.h"
 #include "./aqi.h"
+#include "./graph.h"
 
 Adafruit_SGP30 sgp;
 Adafruit_SCD30 scd30;
@@ -102,47 +103,6 @@ void setup(void)
   Serial.println("SGP30 Found!");
 
   setupHomeKit(&lastCO2Reading, &lastTVOCReading, &lastIAQValue, &lastHumidityReading);
-}
-
-void renderGraph(int x, int y, int width, int height)
-{
-
-  int startX = x - (width / 2);
-  int startY = y - (height / 2);
-
-  gfx->drawFastHLine(startX, startY + height, width, WHITE);
-  gfx->drawFastVLine(startX, startY, height, WHITE);
-
-  float step = (width * 1.0) / (CO2ValueCount - 1);
-  int min = 400;
-  int max = 10000;
-
-  int divider = 400;
-  float logMax = log10(max / divider);
-  float logMin = log10(min / divider);
-  // printf("\nstep: %f\n", step);
-  // printf("\nlogMin: %f\n", logMin);
-  // printf("\nlogMax: %f\n", logMax);
-
-  for (int i = 1; i < CO2ValueCount; i++)
-  {
-    if (CO2Values[i] > min && CO2Values[i] < max)
-    {
-      int lastY = map(log10(CO2Values[i - 1] / divider) * 1000, logMin, logMax * 1000, startY + height, startY);
-      int currentY = map(log10(CO2Values[i] / divider) * 1000, logMin, logMax * 1000, startY + height, startY);
-      uint16_t colour = GREEN;
-      if (CO2Values[i] > 2000)
-      {
-        colour = RED;
-      }
-      else if (CO2Values[i] > 1000)
-      {
-        colour = YELLOW;
-      }
-
-      gfx->drawLine(startX + ((i - 1) * step), lastY, startX + (i * step), currentY, colour);
-    }
-  }
 }
 
 void loop()
@@ -254,7 +214,7 @@ void loop()
 
     //graph
 
-    renderGraph(120, 190, 120, 50);
+    renderGraph(120, 190, 120, 50, gfx, CO2ValueCount, CO2Values);
   }
 
   delay(100);
